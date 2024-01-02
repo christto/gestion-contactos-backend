@@ -1,12 +1,14 @@
 package com.gestion.contactos.modelo;
 
-public class Login {
+public class LoginRespose {
 	
     private boolean success;
     
     private String message;
     
-    private Long usuario_id;
+    private Long usuarioId;
+    
+    private String name;
 
     public boolean getSuccess() {
 		return success;
@@ -25,11 +27,19 @@ public class Login {
 	}
 	
 	public Long getUsuarioId() {
-		return usuario_id;
+		return usuarioId;
 	}
 	
 	public void setUsuarioId(Long usuario_id) {
-		this.usuario_id = usuario_id;
+		this.usuarioId = usuario_id;
+	}
+	
+	public String getName() {
+		return name;
+	}
+	
+	public void setName(String name) {
+		this.name = name;
 	}
 	
 }
