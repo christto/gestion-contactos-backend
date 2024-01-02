@@ -11,6 +11,7 @@ import com.gestion.contactos.modelo.Contacto;
 public interface ContactoRepositorio extends JpaRepository<Contacto, Long>{
 	
 	Optional<Contacto> findById(Long contactoId);
+	Contacto findByTelefono(String telefono);
 	
 	List<Contacto> findByNombreContaining(String nombre);
 }

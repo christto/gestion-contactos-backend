@@ -7,6 +7,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -54,11 +55,19 @@ public class ContactoControlador {
 
 	//Método para guardar el contacto
 	@PostMapping("/contactos/{usuarioId}")
-    public Contacto guardarContacto(@PathVariable Long usuarioId, @RequestBody Contacto contacto) {
+    public ResponseEntity<Contacto> guardarContacto(@PathVariable Long usuarioId, @RequestBody Contacto contacto) {
+		
+		ResponseEntity<Contacto> response;
+		
+		Contacto contactoExistente = contactoRepositorio.findByTelefono(contacto.getTelefono());
+
+		if(contactoExistente != null) {
+			return new ResponseEntity<>(contacto, HttpStatus.CONFLICT);
+		}
 		
 		Usuario usuario = usuarioRepositorio.findById(usuarioId)
 	            .orElseThrow(() -> new ResourceNotFoundException("No existe el usuario con el ID: " + usuarioId));
-
+		
 	    // Asigna el usuario al contacto
 	    UsuarioContacto usuarioContacto = new UsuarioContacto(usuarioId, usuario, contacto);
 
@@ -73,8 +82,9 @@ public class ContactoControlador {
 
 	    // Guarda el usuario
 	    usuarioRepositorio.save(usuario);
+	    
+	    return ResponseEntity.ok(contacto);
 
-	    return contacto;
 	    
     }
     
@@ -93,6 +103,13 @@ public class ContactoControlador {
 	//Método para actualizar contacto
 	@PutMapping("/contactos/{contactoId}")
 	public ResponseEntity<Contacto> actualizarContacto(@PathVariable Long contactoId,@RequestBody Contacto detallesContacto){
+		
+		Contacto contactoExistente = contactoRepositorio.findByTelefono(detallesContacto.getTelefono());
+
+		if(contactoExistente != null) {
+			return new ResponseEntity<>(detallesContacto, HttpStatus.CONFLICT);
+		}
+		
 		Contacto contacto = contactoRepositorio.findById(contactoId)
 				            .orElseThrow(() -> new ResourceNotFoundException("No existe el contacto con el ID : " + contactoId));
 		
