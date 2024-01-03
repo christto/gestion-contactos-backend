@@ -30,7 +30,7 @@ import com.gestion.contactos.repositorio.UsuarioRepositorio;
 
 @RestController
 @RequestMapping("/api/v1/")
-@CrossOrigin(origins = "http://localhost:4200")
+@CrossOrigin(origins = "http://angular-frontend-aws.s3-website-us-east-1.amazonaws.com")
 public class ContactoControlador {
 
 	@Autowired
