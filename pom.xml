@@ -14,7 +14,7 @@
 	<version>1.0</version>
 	<name>gestion-contactos-backend</name>
 	<description>Gestion de contactos - Backend</description>
-	<packaging>war</packaging>
+	
 	<properties>
 		<java.version>1.8</java.version>
 	</properties>
