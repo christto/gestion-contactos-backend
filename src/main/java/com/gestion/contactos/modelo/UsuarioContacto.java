@@ -25,13 +25,6 @@ public class UsuarioContacto {
     private Contacto contacto;
 
     public UsuarioContacto() {}
-
-    public UsuarioContacto(Long id, Usuario usuario, Contacto contacto) {
-        super();
-        this.id = id;
-        this.usuario = usuario;
-        this.contacto = contacto;
-    }
     
     public Long getId() {
         return id;

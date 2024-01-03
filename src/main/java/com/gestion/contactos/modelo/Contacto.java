@@ -31,7 +31,7 @@ public class Contacto {
 	@Column(name = "telefono", length = 12, nullable = false, unique = true)
 	private String telefono;
 
-    @OneToMany(mappedBy = "contacto", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "contacto")
     @JsonIgnore
     private List<UsuarioContacto> usuarios = new ArrayList<>();
 	

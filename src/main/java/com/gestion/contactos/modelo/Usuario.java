@@ -36,7 +36,7 @@ public class Usuario {
 	@Column(name = "password", length = 12, nullable = false)
 	private String password;
 
-	@OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL)
+	@OneToMany(mappedBy = "usuario")
 	@JsonIgnore
     private List<UsuarioContacto> contactos;
 	

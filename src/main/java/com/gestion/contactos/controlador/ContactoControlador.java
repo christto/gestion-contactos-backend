@@ -6,9 +6,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import javax.persistence.EntityNotFoundException;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,7 +20,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.gestion.contactos.excepciones.ResourceNotFoundException;
+import com.gestion.contactos.modelo.ApiResponse;
 import com.gestion.contactos.modelo.Contacto;
 import com.gestion.contactos.modelo.Usuario;
 import com.gestion.contactos.modelo.UsuarioContacto;
@@ -43,111 +44,233 @@ public class ContactoControlador {
 
 	//Método para listar todos los contactos
 	@GetMapping("/contactos/{usuarioId}")
-	public List<Contacto> listarTodosLosContactos(@PathVariable Long usuarioId) {
-		 
-		Usuario usuario = usuarioRepositorio.getById(usuarioId);
-		
-		return usuario.getContactos()
-				.stream()
-				.map(UsuarioContacto::getContacto)
-				.collect(Collectors.toList());
-	}	
+	public ApiResponse<List<Contacto>> listarTodosLosContactos(@PathVariable Long usuarioId) {
+	    ApiResponse<List<Contacto>> response = new ApiResponse<>();
+
+	    try {
+	        Usuario usuario = usuarioRepositorio.getById(usuarioId);
+
+	        List<Contacto> contactos = usuario.getContactos()
+	                .stream()
+	                .map(UsuarioContacto::getContacto)
+	                .collect(Collectors.toList());
+
+	        if (contactos.isEmpty()) {
+	            response.setSuccess(false);
+	            response.setMessage("El usuario no tiene contactos registrados.");
+	            response.setStatusCode(HttpStatus.NOT_FOUND.value());
+	        } else {
+	            response.setSuccess(true);
+	            response.setMessage("Contactos obtenidos exitosamente.");
+	            response.setResult(contactos);
+	            response.setStatusCode(HttpStatus.OK.value());
+	        }
+	    } catch (EntityNotFoundException e) {
+	        response.setSuccess(false);
+	        response.setMessage("No se encontró el usuario con el ID: " + usuarioId);
+	        response.setStatusCode(HttpStatus.NOT_FOUND.value());
+	    } catch (Exception e) {
+	        response.setSuccess(false);
+	        response.setMessage("Error al obtener los contactos: " + e.getMessage());
+	        response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+	    }
+
+	    return response;
+	}
 
 	//Método para guardar el contacto
 	@PostMapping("/contactos/{usuarioId}")
-    public ResponseEntity<Contacto> guardarContacto(@PathVariable Long usuarioId, @RequestBody Contacto contacto) {
-		
-		ResponseEntity<Contacto> response;
-		
-		Contacto contactoExistente = contactoRepositorio.findByTelefono(contacto.getTelefono());
+	public ApiResponse<String> guardarContacto(@PathVariable Long usuarioId, @RequestBody Contacto contacto) {
+	    ApiResponse<String> response = new ApiResponse<>();
 
-		if(contactoExistente != null) {
-			return new ResponseEntity<>(contacto, HttpStatus.CONFLICT);
-		}
-		
-		Usuario usuario = usuarioRepositorio.findById(usuarioId)
-	            .orElseThrow(() -> new ResourceNotFoundException("No existe el usuario con el ID: " + usuarioId));
-		
-	    // Asigna el usuario al contacto
-	    UsuarioContacto usuarioContacto = new UsuarioContacto(usuarioId, usuario, contacto);
+	    try {
+	    	// Verifica si el usuario existe
+		    Optional<Usuario> usuarioOptional = usuarioRepositorio.findById(usuarioId);
+		    if (!usuarioOptional.isPresent()) {
+		        response.setSuccess(false);
+		        response.setMessage("No existe el usuario con el ID: " + usuarioId);
+		        response.setStatusCode(HttpStatus.NOT_FOUND.value());
+		        return response;
+		    }
 
-	    // Guarda primero el contacto para asegurarse de que esté persistido
-	    contactoRepositorio.save(contacto);
+		    Usuario usuario = usuarioOptional.get();
 
-	    // Asigna el contacto persistido a UsuarioContacto
-	    usuarioContacto.setContacto(contacto);
+		    // Verifica si el contacto ya está asociado al usuario
+		    boolean contactoExistente = usuario.getContactos().stream()
+		            .anyMatch(uc -> uc.getContacto().getTelefono().equals(contacto.getTelefono()));
 
-	    // Asigna UsuarioContacto al usuario
-	    usuario.getContactos().add(usuarioContacto);
+		    if (contactoExistente) {
+		        response.setSuccess(false);
+		        response.setMessage("El número ya se encuentra registrado.");
+		        response.setStatusCode(HttpStatus.CONFLICT.value());
+		        return response;
+		    } else {
+	            // Guarda el contacto
+	            contactoRepositorio.save(contacto);
 
-	    // Guarda el usuario
-	    usuarioRepositorio.save(usuario);
-	    
-	    return ResponseEntity.ok(contacto);
+	            // Crea la relación UsuarioContacto
+	            UsuarioContacto usuarioContacto = new UsuarioContacto();
+	            usuarioContacto.setUsuario(usuario);
+	            usuarioContacto.setContacto(contacto);
 
-	    
-    }
-    
+	            // Guarda la relación UsuarioContacto
+	            usuarioContactoRepositorio.save(usuarioContacto);
+
+	            response.setSuccess(true);
+	            response.setMessage("Contacto guardado exitosamente.");
+	            response.setStatusCode(HttpStatus.OK.value());
+	        }
+	    } catch (Exception e) {
+	        response.setSuccess(false);
+	        response.setMessage("Error: " + e.getMessage());
+	        response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+	    }
+
+	    return response;
+	}
+	
 	//Método para buscar un contacto por id
 	@GetMapping("/contacto/{contactoId}")
-	public ResponseEntity<Contacto> obtenerContactoPorId(@PathVariable Long contactoId) {
-	    Optional<Contacto> contactoOptional = contactoRepositorio.findById(contactoId);
+	public ApiResponse<Optional<Contacto>> obtenerContactoPorId(@PathVariable Long contactoId) {
+		ApiResponse<Optional<Contacto>> response = new ApiResponse<Optional<Contacto>>();
+		
+	    Optional<Contacto> contacto = contactoRepositorio.findById(contactoId);
 
-	    if (contactoOptional.isPresent()) {
-	        return ResponseEntity.ok(contactoOptional.get());
+	    if (contacto.isPresent()) {
+	    	response.setSuccess(true);
+            response.setMessage("Contacto encontrado");
+            response.setResult(contacto);
+            response.setStatusCode(HttpStatus.OK.value());
 	    } else {
-	        return ResponseEntity.notFound().build();
+	    	response.setSuccess(false);
+            response.setMessage("Contacto no encontrado");
+            response.setResult(contacto);
+            response.setStatusCode(HttpStatus.NOT_FOUND.value());
 	    }
+	    
+	    return response;
 	}
 	
 	//Método para actualizar contacto
-	@PutMapping("/contactos/{contactoId}")
-	public ResponseEntity<Contacto> actualizarContacto(@PathVariable Long contactoId,@RequestBody Contacto detallesContacto){
-		
-		Contacto contactoExistente = contactoRepositorio.findByTelefono(detallesContacto.getTelefono());
+	@PutMapping("/contactos/{usuarioId}/{contactoId}")
+	public ApiResponse<Contacto> actualizarContacto(@PathVariable Long usuarioId, @PathVariable Long contactoId, @RequestBody Contacto detallesContacto) {
+	    ApiResponse<Contacto> response = new ApiResponse<>();
 
-		if(contactoExistente != null) {
-			return new ResponseEntity<>(detallesContacto, HttpStatus.CONFLICT);
-		}
-		
-		Contacto contacto = contactoRepositorio.findById(contactoId)
-				            .orElseThrow(() -> new ResourceNotFoundException("No existe el contacto con el ID : " + contactoId));
-		
-		contacto.setNombre(detallesContacto.getNombre());
-		contacto.setApellido(detallesContacto.getApellido());
-		contacto.setTelefono(detallesContacto.getTelefono());
-		
-		Contacto contactoActualizado = contactoRepositorio.save(contacto);
-		return ResponseEntity.ok(contactoActualizado);
-    }
+	    // Verifica si el usuario existe
+	    Optional<Usuario> usuarioOptional = usuarioRepositorio.findById(usuarioId);
+	    if (!usuarioOptional.isPresent()) {
+	        response.setSuccess(false);
+	        response.setMessage("No existe el usuario con el ID: " + usuarioId);
+	        response.setStatusCode(HttpStatus.NOT_FOUND.value());
+	        return response;
+	    }
+
+	    Usuario usuario = usuarioOptional.get();
+
+	    // Verifica si el contacto existe
+	    Optional<Contacto> contactoOptional = contactoRepositorio.findById(contactoId);
+	    if (!contactoOptional.isPresent()) {
+	        response.setSuccess(false);
+	        response.setMessage("No existe el contacto con el ID: " + contactoId);
+	        response.setStatusCode(HttpStatus.NOT_FOUND.value());
+	        return response;
+	    }
+
+	    Contacto contacto = contactoOptional.get();
+
+	    // Verifica si hay cambios en los datos del contacto
+	    if (detallesContacto.equals(contacto)) {
+	        response.setSuccess(true);
+	        response.setMessage("No se realizaron cambios en los datos del contacto.");
+	        response.setStatusCode(HttpStatus.OK.value());
+	        return response;
+	    }
+
+	    // Verifica si hay otro contacto con los mismos datos
+	    boolean otroContactoConMismosDatos = usuario.getContactos().stream()
+	            .anyMatch(uc -> {
+	                Contacto otroContacto = uc.getContacto();
+	                return otroContacto.getId() != contacto.getId() &&
+	                        otroContacto.getNombre().equals(detallesContacto.getNombre()) &&
+	                        otroContacto.getApellido().equals(detallesContacto.getApellido()) &&
+	                        otroContacto.getTelefono().equals(detallesContacto.getTelefono());
+	            });
+
+	    if (otroContactoConMismosDatos) {
+	        response.setSuccess(false);
+	        response.setMessage("Ya hay otro contacto con esos datos.");
+	        response.setStatusCode(HttpStatus.CONFLICT.value());
+	        return response;
+	    }
+
+	    // Actualiza los datos del contacto
+	    contacto.setNombre(detallesContacto.getNombre());
+	    contacto.setApellido(detallesContacto.getApellido());
+	    contacto.setTelefono(detallesContacto.getTelefono());
+
+	    Contacto contactoActualizado = contactoRepositorio.save(contacto);
+
+	    response.setSuccess(true);
+	    response.setMessage("Contacto actualizado exitosamente.");
+	    response.setResult(contactoActualizado);
+	    response.setStatusCode(HttpStatus.OK.value());
+
+	    return response;
+	}
 	
 	//Método para eliminar un contacto
 	@DeleteMapping("/contactos/{usuarioId}/{contactoId}")
-	public ResponseEntity<Map<String, Boolean>> eliminarContactoYRelacion(
-	        @PathVariable Long usuarioId,
-	        @PathVariable Long contactoId) {
-	    // Primero, verifica si el usuario existe
-	    Usuario usuario = usuarioRepositorio.findById(usuarioId)
-	            .orElseThrow(() -> new ResourceNotFoundException("No existe el usuario con el ID : " + usuarioId));
+	public ApiResponse<Map<String, Boolean>> eliminarContactoYRelacion(@PathVariable Long usuarioId, @PathVariable Long contactoId) {
+	    ApiResponse<Map<String, Boolean>> response = new ApiResponse<>();
 
-	    // Luego, verifica si el contacto existe
-	    Contacto contacto = contactoRepositorio.findById(contactoId)
-	            .orElseThrow(() -> new ResourceNotFoundException("No existe el contacto con el ID : " + contactoId));
+	    // Verifica si el usuario existe
+	    Optional<Usuario> usuarioOptional = usuarioRepositorio.findById(usuarioId);
+	    if (!usuarioOptional.isPresent()) {
+	        response.setSuccess(false);
+	        response.setMessage("No existe el usuario con el ID: " + usuarioId);
+	        response.setStatusCode(HttpStatus.NOT_FOUND.value());
+	        return response;
+	    }
+
+	    Usuario usuario = usuarioOptional.get();
+
+	    // Verifica si el contacto existe
+	    Optional<Contacto> contactoOptional = contactoRepositorio.findById(contactoId);
+	    if (!contactoOptional.isPresent()) {
+	        response.setSuccess(false);
+	        response.setMessage("No existe el contacto con el ID: " + contactoId);
+	        response.setStatusCode(HttpStatus.NOT_FOUND.value());
+	        return response;
+	    }
+
+	    Contacto contacto = contactoOptional.get();
 
 	    // Verifica si el contacto está asociado al usuario
-	    UsuarioContacto usuarioContacto = usuarioContactoRepositorio
-	            .findByUsuarioAndContacto(usuario, contacto)
-	            .orElseThrow(() -> new ResourceNotFoundException("El contacto no está asociado al usuario"));
+	    Optional<UsuarioContacto> usuarioContactoOptional = usuarioContactoRepositorio
+	            .findByUsuarioAndContacto(usuario, contacto);
+
+	    if (!usuarioContactoOptional.isPresent()) {
+	        response.setSuccess(false);
+	        response.setMessage("El contacto no está asociado al usuario.");
+	        response.setStatusCode(HttpStatus.BAD_REQUEST.value()); 
+	        return response;
+	    }
 
 	    // Elimina la relación usuario-contacto
-	    usuarioContactoRepositorio.delete(usuarioContacto);
+	    usuarioContactoRepositorio.delete(usuarioContactoOptional.get());
 
 	    // Elimina el contacto
 	    contactoRepositorio.delete(contacto);
 
 	    Map<String, Boolean> respuesta = new HashMap<>();
 	    respuesta.put("eliminar", Boolean.TRUE);
-	    return ResponseEntity.ok(respuesta);
+
+	    response.setSuccess(true);
+	    response.setMessage("Contacto eliminado exitosamente.");
+	    response.setResult(respuesta);
+	    response.setStatusCode(HttpStatus.OK.value());
+
+	    return response;
 	}
 
 }
